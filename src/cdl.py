@@ -1,3 +1,5 @@
+# NOT NEEDED ANYMORE
+
 import ast
 
 CDL_FN = '../data/CDL_crops.txt'

@@ -3,20 +3,20 @@ import gdal
 import os
 import random
 
-def load_img(img_file, val_type='uint8', bands_only=False, num_bands=4):
-    """
-    Loads an image using gdal, returns it as an array.
-    """
-    obj = gdal.Open(img_file)
-    if val_type == 'uint8':
-        img = obj.ReadAsArray().astype(np.uint8)
-    elif val_type == 'float32':
-        img = obj.ReadAsArray().astype(np.float32)
-    else:
-        raise ValueError('Invalid val_type for image values. Try uint8 or float32.')
-    img = np.moveaxis(img, 0, -1)
-    if bands_only: img = img[:,:,:num_bands]
-    return img
+# def load_img(img_file, val_type='uint8', bands_only=False, num_bands=4):
+#     """
+#     Loads an image using gdal, returns it as an array.
+#     """
+#     obj = gdal.Open(img_file)
+#     if val_type == 'uint8':
+#         img = obj.ReadAsArray().astype(np.uint8)
+#     elif val_type == 'float32':
+#         img = obj.ReadAsArray().astype(np.float32)
+#     else:
+#         raise ValueError('Invalid val_type for image values. Try uint8 or float32.')
+#     img = np.moveaxis(img, 0, -1)
+#     if bands_only: img = img[:,:,:num_bands]
+#     return img
 
 def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
     """
@@ -34,6 +34,9 @@ def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
 
 def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhood=100, 
                       val_type='uint8', bands_only=False, save=True, verbose=False):
+    # We only want to load each image into memory once. For each unique image,
+    # load it into memory, and then loop through "img_triplets" to find which
+    # sub-tiles should come from that image.
     if not os.path.exists(tile_dir):
         os.makedirs(tile_dir)
     size_even = (tile_size % 2 == 0)
@@ -45,18 +48,23 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhoo
 
     for img_name in unique_imgs:
         print("Sampling image {}".format(img_name))
-        if img_name[-3:] == 'npy':
-            img = np.load(img_name)
-        else:
-            img = load_img(os.path.join(img_dir, img_name), val_type=val_type, 
-                       bands_only=bands_only)
-        img_padded = np.pad(img, pad_width=[(tile_radius, tile_radius),
-                                            (tile_radius, tile_radius), (0,0)],
-                            mode='reflect')
+        # if img_name[-3:] == 'npy':
+        #     img = np.load(img_name)
+        # else:
+        #     img = load_img(os.path.join(img_dir, img_name), val_type=val_type,
+        #                bands_only=bands_only)
+        # Pad image with 0's. I don't think this is necessary?
+        # img_padded = np.pad(img, pad_width=[(tile_radius, tile_radius),
+        #                                     (tile_radius, tile_radius), (0,0)],
+        #                     mode='reflect')
+
+        assert (img_name[-3] == 'npy')
+        img_padded = np.load(img_name)
         img_shape = img_padded.shape
 
         for idx, row in enumerate(img_triplets):
             if row[0] == img_name:
+                # From this image, sample an "anchor" and "neighbor" subtile that are close to each other
                 xa, ya = sample_anchor(img_shape, tile_radius)
                 xn, yn = sample_neighbor(img_shape, xa, ya, neighborhood, tile_radius)
                 

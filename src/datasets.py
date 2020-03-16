@@ -4,7 +4,7 @@ import torch
 import glob
 import os
 import numpy as np
-from src.data_utils import clip_and_scale_image
+from src.data_utils import standardize_image
 
 
 class TileTripletsDataset(Dataset):
@@ -82,19 +82,18 @@ class RandomFlipAndRotate(object):
         sample = {'anchor': a, 'neighbor': n, 'distant': d}
         return sample
 
-class ClipAndScale(object):
+class StandardizeImage(object):
     """
-    Clips and scales bands to between [0, 1] for NAIP, RGB, and Landsat
-    satellite images. Clipping applies for Landsat only.
+    Standardizes images so that all bands have mean 0, standard deviation 1.
     """
-    def __init__(self, img_type):
-        assert img_type in ['naip', 'rgb', 'landsat']
-        self.img_type = img_type
+    def __init__(self, band_means, band_stds):
+        self.band_means = band_means
+        self.band_stds = band_stds
 
     def __call__(self, sample):
-        a, n, d = (clip_and_scale_image(sample['anchor'], self.img_type),
-                   clip_and_scale_image(sample['neighbor'], self.img_type),
-                   clip_and_scale_image(sample['distant'], self.img_type))
+        a, n, d = (standardize_image(sample['anchor'], self.band_means, self.band_stds),
+                   standardize_image(sample['neighbor'], self.band_means, self.band_stds),
+                   standardize_image(sample['distant'], self.band_means, self.band_stds))
         sample = {'anchor': a, 'neighbor': n, 'distant': d}
         return sample
 
@@ -112,7 +111,7 @@ class ToFloatTensor(object):
 ### TRANSFORMS ###
 
 
-def triplet_dataloader(img_type, tile_dir, bands=4, augment=True,
+def triplet_dataloader(img_type, tile_dir, band_means, band_stds, augment=True,
     batch_size=4, shuffle=True, num_workers=4, n_triplets=None,
     pairs_only=True):
     """
@@ -122,8 +121,8 @@ def triplet_dataloader(img_type, tile_dir, bands=4, augment=True,
     """
     assert img_type in ['landsat', 'rgb', 'naip']
     transform_list = []
-    if img_type in ['landsat', 'naip']: transform_list.append(GetBands(bands))
-    transform_list.append(ClipAndScale(img_type))
+    # if img_type in ['landsat', 'naip']: transform_list.append(GetBands(bands))
+    transform_list.append(StandardizeImage(band_means, band_stds))
     if augment: transform_list.append(RandomFlipAndRotate())
     transform_list.append(ToFloatTensor())
     transform = transforms.Compose(transform_list)
