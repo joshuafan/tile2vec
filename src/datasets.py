@@ -30,9 +30,10 @@ class TileTripletsDataset(Dataset):
             d = np.load(os.path.join(self.tile_dir, '{}{}.npy'.format(d_idx, name)))
         else:
             d = np.load(os.path.join(self.tile_dir, '{}distant.npy'.format(idx)))
-        a = np.moveaxis(a, -1, 0)
-        n = np.moveaxis(n, -1, 0)
-        d = np.moveaxis(d, -1, 0)
+        # Our .npy files are already in (C x H x W) format, no need to move channels dimension to front
+        #a = np.moveaxis(a, -1, 0)
+        #n = np.moveaxis(n, -1, 0)
+        #d = np.moveaxis(d, -1, 0)
         sample = {'anchor': a, 'neighbor': n, 'distant': d}
         if self.transform:
             sample = self.transform(sample)
@@ -111,7 +112,7 @@ class ToFloatTensor(object):
 ### TRANSFORMS ###
 
 
-def triplet_dataloader(img_type, tile_dir, band_means, band_stds, augment=True,
+def triplet_dataloader(tile_dir, band_means, band_stds, augment=True,
     batch_size=4, shuffle=True, num_workers=4, n_triplets=None,
     pairs_only=True):
     """
@@ -119,7 +120,7 @@ def triplet_dataloader(img_type, tile_dir, band_means, band_stds, augment=True,
     Turn shuffle to False for producing embeddings that correspond to original
     tiles.
     """
-    assert img_type in ['landsat', 'rgb', 'naip']
+    #assert img_type in ['landsat', 'rgb', 'naip']
     transform_list = []
     # if img_type in ['landsat', 'naip']: transform_list.append(GetBands(bands))
     transform_list.append(StandardizeImage(band_means, band_stds))

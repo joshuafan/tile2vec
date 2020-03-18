@@ -32,8 +32,8 @@ def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
     img_triplets = np.array(img_triplets)
     return img_triplets.reshape((-1, 2))
 
-def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhood=100, 
-                      val_type='uint8', bands_only=False, save=True, verbose=False):
+def get_triplet_tiles(tile_dir, img_triplets, tile_size=50, neighborhood=100,
+                      save=True, verbose=False):
     # We only want to load each image into memory once. For each unique image,
     # load it into memory, and then loop through "img_triplets" to find which
     # sub-tiles should come from that image.
@@ -59,7 +59,7 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhoo
         #                     mode='reflect')
 
         assert (img_name[-3] == 'npy')
-        img_padded = np.load(img_name)
+        img_padded = np.load(img_name)  # TODO Reshape???
         img_shape = img_padded.shape
 
         for idx, row in enumerate(img_triplets):
