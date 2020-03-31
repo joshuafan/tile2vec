@@ -5,19 +5,32 @@ import os
 import torch
 import torch.optim as optim
 
-from .datasets import triplet_dataloader
-from .sample_tiles import get_triplet_imgs, get_triplet_tiles
-from .tilenet import make_tilenet
-from .training import train_triplet_epoch
+from datasets import triplet_dataloader
+from sample_tiles import get_triplet_imgs, get_triplet_tiles
+from tilenet import make_tilenet
+from training import train_triplet_epoch
 
-DATASET_DIR = "datasets/dataset_2018-08-01"
+START_DATE = "2018-08-01"
+DATASET_DIR = "../../RemoteSensing/datasets/dataset_" + START_DATE
+IMAGE_DIR = "../../RemoteSensing/datasets/images_" + START_DATE
 BAND_STATISTICS_FILE = os.path.join(DATASET_DIR, "band_statistics_train.csv")
-TIF_IMAGE_DIR = "../../RemoteSensing/datasets/LandsatReflectance/2018-08-01"
-TILE_DATASET_DIR = "../../RemoteSensing/datasets/tile2vec_tiles_2018-08-01"
+TILE2VEC_TILE_DATASET_DIR = "../../RemoteSensing/datasets/tile2vec_tiles_2018-08-01"
 MODEL_DIR = "../../RemoteSensing/models/tile2vec"
+
+if not os.path.exists(TILE2VEC_TILE_DATASET_DIR):
+    os.makedirs(TILE2VEC_TILE_DATASET_DIR)
+if not os.path.exists(MODEL_DIR):
+    os.makedirs(MODEL_DIR)
+
 RGB_BANDS = [1, 2, 3]
-img_triplets = get_triplet_imgs(TIF_IMAGE_DIR, n_triplets=20)
-tiles = get_triplet_tiles(TILE_DATASET_DIR,
+NUM_TRIPLETS = 100000
+
+# Choose which files to sample triplets of tiles from 
+img_triplets = get_triplet_imgs(IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
+
+# Get tiles
+tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
+                          IMAGE_DIR,
                           img_triplets,
                           tile_size=10,
                           neighborhood=100,
@@ -25,28 +38,30 @@ tiles = get_triplet_tiles(TILE_DATASET_DIR,
                           verbose=True)
 
 # Visualize
-tile_dir = '../data/example_tiles/'
-n_triplets = 2
-plt.rcParams['figure.figsize'] = (12, 4)
-for i in range(n_triplets):
-    tile = np.load(os.path.join(tile_dir, str(i) + 'anchor.npy'))
-    neighbor = np.load(os.path.join(tile_dir, str(i) + 'neighbor.npy'))
-    distant = np.load(os.path.join(tile_dir, str(i) + 'distant.npy'))
+#tile_dir = '../data/example_tiles/'
+#triplets_to_visualize = 10
+#plt.rcParams['figure.figsize'] = (12, 4)
+#for i in range(triplets_to_visualize):
+#    tile = np.load(os.path.join(TILE2VEC_TILE_DATASET_DIR, str(i) + 'anchor.npy'))
+#    neighbor = np.load(os.path.join(TILE2VEC_TILE_DATASET_DIR, str(i) + 'neighbor.npy'))
+#    distant = np.load(os.path.join(TILE2VEC_TILE_DATASET_DIR, str(i) + 'distant.npy'))
+#    print('tile shape', tile.shape, 'dtype', tile.dtype)
+#    visualize_image = np.moveaxis(neighbor[RGB_BANDS, :, :] / 1000., 0, -1)
+#    print('visualized', visualize_image.shape, 'dtype', tile.dtype)
+#    #vmin = np.array([tile, neighbor, distant]).min()
+#    #vmax = np.array([tile, neighbor, distant]).max()
 
-    vmin = np.array([tile, neighbor, distant]).min()
-    vmax = np.array([tile, neighbor, distant]).max()
-
-    plt.figure()
-    plt.subplot(1, 3, 1)
-    plt.imshow(tile[RGB_BANDS, :, :])
-    plt.title('Anchor ' + str(i))
-    plt.subplot(1, 3, 2)
-    plt.imshow(neighbor[RGB_BANDS, :, :])
-    plt.title('Neighbor ' + str(i))
-    plt.subplot(1, 3, 3)
-    plt.imshow(distant[RGB_BANDS, :, :])
-    plt.title('Distant ' + str(i))
-plt.savefig('../../RemoteSensing/exploratory_plots/example_tiles.png')
+#    plt.figure()
+#    plt.subplot(1, 3, 1)
+#    plt.imshow(np.moveaxis(tile[RGB_BANDS, :, :] / 1000., 0, -1))
+#    plt.title('Anchor ' + str(i))
+#    plt.subplot(1, 3, 2)
+#    plt.imshow(np.moveaxis(neighbor[RGB_BANDS, :, :] / 1000., 0, -1))
+#    plt.title('Neighbor ' + str(i))
+#    plt.subplot(1, 3, 3)
+#    plt.imshow(np.moveaxis(distant[RGB_BANDS, :, :] / 1000., 0, -1))
+#    plt.title('Distant ' + str(i))
+#    plt.savefig('../../RemoteSensing/exploratory_plots/example_tiles_' + str(i) +'.png')
 
 # Read mean/standard deviation for each band, for standardization purposes
 train_statistics = pd.read_csv(BAND_STATISTICS_FILE)
@@ -59,15 +74,14 @@ augment = True
 batch_size = 50
 shuffle = True
 num_workers = 4
-n_triplets = 100000
 bands=14
 
 cuda = torch.cuda.is_available()
-dataloader = triplet_dataloader(tile_dir, band_means, band_stds, augment=augment,
+dataloader = triplet_dataloader(TILE2VEC_TILE_DATASET_DIR, band_means, band_stds, augment=augment,
                                 batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
-                                n_triplets=n_triplets, pairs_only=True)
+                                n_triplets=NUM_TRIPLETS, pairs_only=True)
 in_channels = bands
-z_dim = 20
+z_dim = 32
 
 # Set up network
 TileNet = make_tilenet(in_channels=in_channels, z_dim=z_dim)
@@ -76,12 +90,12 @@ if cuda: TileNet.cuda()
 
 
 # Set up optimizer
-lr = 1e-3
+lr = 1e-4
 optimizer = optim.Adam(TileNet.parameters(), lr=lr, betas=(0.5, 0.999))
 epochs = 50
 margin = 10
 l2 = 0.01
-print_every = 10000
+print_every = 100000
 save_models = True
 if not os.path.exists(MODEL_DIR): os.makedirs(MODEL_DIR)
 

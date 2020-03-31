@@ -4,7 +4,7 @@ import torch
 import glob
 import os
 import numpy as np
-from src.data_utils import standardize_image
+from data_utils import standardize_image
 
 
 class TileTripletsDataset(Dataset):
@@ -120,6 +120,7 @@ def triplet_dataloader(tile_dir, band_means, band_stds, augment=True,
     Turn shuffle to False for producing embeddings that correspond to original
     tiles.
     """
+    # TODO Document changes, move transforms to param
     #assert img_type in ['landsat', 'rgb', 'naip']
     transform_list = []
     # if img_type in ['landsat', 'naip']: transform_list.append(GetBands(bands))

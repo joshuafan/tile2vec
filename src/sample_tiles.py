@@ -1,5 +1,5 @@
 import numpy as np
-import gdal
+#import gdal
 import os
 import random
 
@@ -18,6 +18,24 @@ import random
 #     if bands_only: img = img[:,:,:num_bands]
 #     return img
 
+
+# Compute L1-norm between anchor and neighbor crop type distributions
+def compute_crop_type_distance(anchor_tile, neighbor_tile):
+    CROP_TYPE_INDICES = [9, 10, 11, 12]
+    #print('========================')
+    #print('anchor tile shape', anchor_tile.shape)
+    anchor_crop_masks = anchor_tile[CROP_TYPE_INDICES, :, :]
+    neighbor_crop_masks = neighbor_tile[CROP_TYPE_INDICES, :, :]
+    anchor_crop_types = np.mean(anchor_crop_masks, axis=(1,2))
+    neighbor_crop_types = np.mean(neighbor_crop_masks, axis=(1,2))
+    assert(anchor_crop_types.shape[0] == 4)
+    l1_norm = np.linalg.norm(anchor_crop_types - neighbor_crop_types, ord=1)
+    #print('Anchor crop types', anchor_crop_types)
+    #print('Neighbor crop types', neighbor_crop_types)
+    #print('L1 norm', l1_norm)
+    return l1_norm
+
+
 def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
     """
     Returns a numpy array of dimension (n_triplets, 2). First column is
@@ -32,8 +50,8 @@ def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
     img_triplets = np.array(img_triplets)
     return img_triplets.reshape((-1, 2))
 
-def get_triplet_tiles(tile_dir, img_triplets, tile_size=50, neighborhood=100,
-                      save=True, verbose=False):
+def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhood=100,
+                      save=True, verbose=False, MAX_CROP_TYPE_DISTANCE=0.2):
     # We only want to load each image into memory once. For each unique image,
     # load it into memory, and then loop through "img_triplets" to find which
     # sub-tiles should come from that image.
@@ -58,29 +76,38 @@ def get_triplet_tiles(tile_dir, img_triplets, tile_size=50, neighborhood=100,
         #                                     (tile_radius, tile_radius), (0,0)],
         #                     mode='reflect')
 
-        assert (img_name[-3] == 'npy')
-        img_padded = np.load(img_name)  # TODO Reshape???
+        assert (img_name[-3:] == 'npy')
+        img_padded = np.load(os.path.join(img_dir, img_name))  # TODO Reshape???
         img_shape = img_padded.shape
 
         for idx, row in enumerate(img_triplets):
             if row[0] == img_name:
                 # From this image, sample an "anchor" and "neighbor" subtile that are close to each other
-                xa, ya = sample_anchor(img_shape, tile_radius)
-                xn, yn = sample_neighbor(img_shape, xa, ya, neighborhood, tile_radius)
+                found_similar_neighbors = False
                 
-                if verbose:
-                    print("    Saving anchor and neighbor tile #{}".format(idx))
-                    print("    Anchor tile center:{}".format((xa, ya)))
-                    print("    Neighbor tile center:{}".format((xn, yn)))
-                if save:
+                # keep sampling until we find anchor/neighbor with similar crop type
+                tries = 0
+                while not found_similar_neighbors:
+                    xa, ya = sample_anchor(img_shape, tile_radius)
+                    xn, yn = sample_neighbor(img_shape, xa, ya, neighborhood, tile_radius)
+                    if verbose:
+                        print("    Saving anchor and neighbor tile #{}".format(idx))
+                        print("    Anchor tile center:{}".format((xa, ya)))
+                        print("    Neighbor tile center:{}".format((xn, yn)))
+                
+                    # if save:
                     tile_anchor = extract_tile(img_padded, xa, ya, tile_radius)
                     tile_neighbor = extract_tile(img_padded, xn, yn, tile_radius)
                     if size_even:
-                        tile_anchor = tile_anchor[:-1,:-1]
-                        tile_neighbor = tile_neighbor[:-1,:-1]
-                    np.save(os.path.join(tile_dir, '{}anchor.npy'.format(idx)), tile_anchor)
-                    np.save(os.path.join(tile_dir, '{}neighbor.npy'.format(idx)), tile_neighbor)
-                
+                        tile_anchor = tile_anchor[:, :-1,:-1]
+                        tile_neighbor = tile_neighbor[:, :-1,:-1]
+                    tries += 1
+                    crop_type_distance = compute_crop_type_distance(tile_anchor, tile_neighbor)
+                    if crop_type_distance <= MAX_CROP_TYPE_DISTANCE:
+                        found_similar_neighbors = True
+                if tries > 3:
+                    print('Num tries required to find similar crop type:', tries)
+
                 tiles[idx,0,:] = xa - tile_radius, ya - tile_radius
                 tiles[idx,1,:] = xn - tile_radius, yn - tile_radius
                 
@@ -93,7 +120,7 @@ def get_triplet_tiles(tile_dir, img_triplets, tile_size=50, neighborhood=100,
                     if save:
                         tile_distant = extract_tile(img_padded, xd, yd, tile_radius)
                         if size_even:
-                            tile_distant = tile_distant[:-1,:-1]
+                            tile_distant = tile_distant[:, :-1,:-1]
                         np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
                     tiles[idx,2,:] = xd - tile_radius, yd - tile_radius
             
@@ -106,14 +133,14 @@ def get_triplet_tiles(tile_dir, img_triplets, tile_size=50, neighborhood=100,
                 if save:
                     tile_distant = extract_tile(img_padded, xd, yd, tile_radius)
                     if size_even:
-                        tile_distant = tile_distant[:-1,:-1]
+                        tile_distant = tile_distant[:, :-1,:-1]
                     np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
                 tiles[idx,2,:] = xd - tile_radius, yd - tile_radius
             
     return tiles
 
 def sample_anchor(img_shape, tile_radius):
-    w_padded, h_padded, c = img_shape
+    c, w_padded, h_padded = img_shape
     w = w_padded - 2 * tile_radius
     h = h_padded - 2 * tile_radius
     
@@ -122,7 +149,7 @@ def sample_anchor(img_shape, tile_radius):
     return xa, ya
 
 def sample_neighbor(img_shape, xa, ya, neighborhood, tile_radius):
-    w_padded, h_padded, c = img_shape
+    c, w_padded, h_padded = img_shape
     w = w_padded - 2 * tile_radius
     h = h_padded - 2 * tile_radius
     
@@ -134,7 +161,7 @@ def sample_neighbor(img_shape, xa, ya, neighborhood, tile_radius):
 
 
 def sample_distant_same(img_shape, xa, ya, neighborhood, tile_radius):
-    w_padded, h_padded, c = img_shape
+    c, w_padded, h_padded = img_shape
     w = w_padded - 2 * tile_radius
     h = h_padded - 2 * tile_radius
     
@@ -155,7 +182,7 @@ def extract_tile(img_padded, x0, y0, tile_radius):
     the center pixel and the tile size. E.g., if the tile
     size is 15 pixels per side, then the tile radius should be 7.
     """
-    w_padded, h_padded, c = img_padded.shape
+    c, w_padded, h_padded = img_padded.shape
     row_min = x0 - tile_radius
     row_max = x0 + tile_radius
     col_min = y0 - tile_radius
@@ -164,6 +191,6 @@ def extract_tile(img_padded, x0, y0, tile_radius):
     assert row_max <= w_padded, 'Row max: {}'.format(row_max)
     assert col_min >= 0, 'Col min: {}'.format(col_min)
     assert col_max <= h_padded, 'Col max: {}'.format(col_max)
-    tile = img_padded[row_min:row_max+1, col_min:col_max+1, :]
+    tile = img_padded[:, row_min:row_max+1, col_min:col_max+1]
     return tile
 

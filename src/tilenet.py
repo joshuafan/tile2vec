@@ -40,15 +40,15 @@ class TileNet(nn.Module):
         super(TileNet, self).__init__()
         self.in_channels = in_channels
         self.z_dim = z_dim
-        self.in_planes = 64
+        self.in_planes = 16
 
-        self.conv1 = nn.Conv2d(self.in_channels, 64, kernel_size=3, stride=1,
+        self.conv1 = nn.Conv2d(self.in_channels, 16, kernel_size=3, stride=1,
             padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.layer1 = self._make_layer(64, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(128, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(512, num_blocks[3], stride=2)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.layer1 = self._make_layer(16, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(32, num_blocks[1], stride=1)
+        #self.layer3 = self._make_layer(256, num_blocks[2], stride=1)
+        #self.layer4 = self._make_layer(512, num_blocks[3], stride=1)
         self.layer5 = self._make_layer(self.z_dim, num_blocks[4],
             stride=2)
 
@@ -64,8 +64,8 @@ class TileNet(nn.Module):
         x = F.relu(self.bn1(self.conv1(x)))
         x = self.layer1(x)
         x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        #x = self.layer3(x)
+        #x = self.layer4(x)
         x = self.layer5(x)
         x = F.avg_pool2d(x, 4)
         z = x.view(x.size(0), -1)
@@ -91,8 +91,10 @@ class TileNet(nn.Module):
         """
         Computes loss for each batch.
         """
+        #print('patch shape', patch.shape)
         z_p, z_n, z_d = (self.encode(patch), self.encode(neighbor),
             self.encode(distant))
+        #print('embedding shape', z_p.shape)
         return self.triplet_loss(z_p, z_n, z_d, margin=margin, l2=l2)
 
 

@@ -1,3 +1,5 @@
+import numpy as np
+
 # import os
 # import gdal
 # import imageio
@@ -17,6 +19,8 @@
 #         return np.clip(img, clip_min, clip_max) / (clip_max - clip_min)
 
 def standardize_image(img, band_means, band_stds):
-    print("Image shape", img.shape)
-    print("Means shape", band_means.shape)
+    band_means = band_means[:, np.newaxis, np.newaxis]
+    band_stds = band_stds[:, np.newaxis, np.newaxis]
+    #print("Image shape", img.shape)
+    #print("Means shape", band_means.shape)
     return (img - band_means) / band_stds
