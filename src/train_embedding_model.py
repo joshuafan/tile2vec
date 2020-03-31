@@ -81,7 +81,7 @@ dataloader = triplet_dataloader(TILE2VEC_TILE_DATASET_DIR, band_means, band_stds
                                 batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
                                 n_triplets=NUM_TRIPLETS, pairs_only=True)
 in_channels = bands
-z_dim = 32
+z_dim = 10
 
 # Set up network
 TileNet = make_tilenet(in_channels=in_channels, z_dim=z_dim)
