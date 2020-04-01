@@ -14,8 +14,8 @@ START_DATE = "2018-08-01"
 DATASET_DIR = "../../RemoteSensing/datasets/dataset_" + START_DATE
 IMAGE_DIR = "../../RemoteSensing/datasets/images_" + START_DATE
 BAND_STATISTICS_FILE = os.path.join(DATASET_DIR, "band_statistics_train.csv")
-TILE2VEC_TILE_DATASET_DIR = "../../RemoteSensing/datasets/tile2vec_tiles_2018-08-01"
-MODEL_DIR = "../../RemoteSensing/models/tile2vec"
+TILE2VEC_TILE_DATASET_DIR = "../../RemoteSensing/datasets/tile2vec_tiles_2018-08-01_neighborhood500"
+MODEL_DIR = "../../RemoteSensing/models/tile2vec_dim10_neighborhood500"
 
 if not os.path.exists(TILE2VEC_TILE_DATASET_DIR):
     os.makedirs(TILE2VEC_TILE_DATASET_DIR)
@@ -33,7 +33,7 @@ tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
                           IMAGE_DIR,
                           img_triplets,
                           tile_size=10,
-                          neighborhood=100,
+                          neighborhood=500,
                           save=True,
                           verbose=True)
 
@@ -76,7 +76,8 @@ shuffle = True
 num_workers = 4
 bands=14
 
-cuda = torch.cuda.is_available()
+cuda = torch.cuda.is_available() and 'CUDA_VISIBLE_DEVICES' in os.environ
+print('Cuda:', cuda)
 dataloader = triplet_dataloader(TILE2VEC_TILE_DATASET_DIR, band_means, band_stds, augment=augment,
                                 batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
                                 n_triplets=NUM_TRIPLETS, pairs_only=True)
@@ -90,7 +91,7 @@ if cuda: TileNet.cuda()
 
 
 # Set up optimizer
-lr = 1e-4
+lr = 1e-3
 optimizer = optim.Adam(TileNet.parameters(), lr=lr, betas=(0.5, 0.999))
 epochs = 50
 margin = 10

@@ -20,7 +20,7 @@ import random
 
 
 # Compute L1-norm between anchor and neighbor crop type distributions
-def compute_crop_type_distance(anchor_tile, neighbor_tile):
+def crop_type_distance(anchor_tile, neighbor_tile):
     CROP_TYPE_INDICES = [9, 10, 11, 12]
     #print('========================')
     #print('anchor tile shape', anchor_tile.shape)
@@ -34,6 +34,12 @@ def compute_crop_type_distance(anchor_tile, neighbor_tile):
     #print('Neighbor crop types', neighbor_crop_types)
     #print('L1 norm', l1_norm)
     return l1_norm
+
+
+# Compute fraction of pixels where data is missing
+def fraction_missing_pixels(tile):
+    MISSING_DATA_IDX = -1
+    return np.mean(tile[MISSING_DATA_IDX, :, :])
 
 
 def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
@@ -51,7 +57,8 @@ def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
     return img_triplets.reshape((-1, 2))
 
 def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhood=100,
-                      save=True, verbose=False, MAX_CROP_TYPE_DISTANCE=0.2):
+                      save=True, verbose=False, MAX_CROP_TYPE_DISTANCE=0.4,
+                      MAX_MISSING_PIXELS=0.5):
     # We only want to load each image into memory once. For each unique image,
     # load it into memory, and then loop through "img_triplets" to find which
     # sub-tiles should come from that image.
@@ -82,12 +89,11 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhoo
 
         for idx, row in enumerate(img_triplets):
             if row[0] == img_name:
-                # From this image, sample an "anchor" and "neighbor" subtile that are close to each other
-                found_similar_neighbors = False
-                
-                # keep sampling until we find anchor/neighbor with similar crop type
+                # From this image, sample an "anchor" and "neighbor" subtile that are close to each other 
+                # keep sampling until we find anchor/neighbor with similar crop type, AND are not cloud-covered
                 tries = 0
-                while not found_similar_neighbors:
+                found_good_neighbors = False
+                while not found_good_neighbors:
                     xa, ya = sample_anchor(img_shape, tile_radius)
                     xn, yn = sample_neighbor(img_shape, xa, ya, neighborhood, tile_radius)
                     if verbose:
@@ -102,18 +108,49 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhoo
                         tile_anchor = tile_anchor[:, :-1,:-1]
                         tile_neighbor = tile_neighbor[:, :-1,:-1]
                     tries += 1
-                    crop_type_distance = compute_crop_type_distance(tile_anchor, tile_neighbor)
-                    if crop_type_distance <= MAX_CROP_TYPE_DISTANCE:
-                        found_similar_neighbors = True
-                if tries > 3:
-                    print('Num tries required to find similar crop type:', tries)
+                    print('fraction missing', fraction_missing_pixels(tile_anchor))
+                    if (fraction_missing_pixels(tile_anchor) <= MAX_MISSING_PIXELS and fraction_missing_pixels(tile_neighbor) <= MAX_MISSING_PIXELS and crop_type_distance(tile_anchor, tile_neighbor) <= MAX_CROP_TYPE_DISTANCE):
+                        found_good_neighbors = True
+                    else:
+                        print('Try again.')
+                    if tries > 20:
+                        print('Failed to find good tile even after 20 tries.')
+                        break
 
+                np.save(os.path.join(tile_dir, '{}anchor.npy'.format(idx)), tile_anchor)
+                np.save(os.path.join(tile_dir, '{}neighbor.npy'.format(idx)), tile_neighbor)
                 tiles[idx,0,:] = xa - tile_radius, ya - tile_radius
                 tiles[idx,1,:] = xn - tile_radius, yn - tile_radius
                 
                 if row[1] == img_name:
                     # distant image is same as anchor/neighbor image
-                    xd, yd = sample_distant_same(img_shape, xa, ya, neighborhood, tile_radius)
+                    found_good_tile = False
+                    tries = 0
+                    while not found_good_tile:
+                        tries += 1
+                        xd, yd = sample_distant_same(img_shape, xa, ya, neighborhood, tile_radius)
+                        if verbose:
+                            print("    Saving distant tile #{}".format(idx))
+                            print("    Distant tile center:{}".format((xd, yd)))
+                        if save:
+                            tile_distant = extract_tile(img_padded, xd, yd, tile_radius)
+                            if size_even:
+                                tile_distant = tile_distant[:, :-1,:-1]
+                            if fraction_missing_pixels(tile_distant) <= MAX_MISSING_PIXELS:
+                                found_good_tile = True
+                        if tries > 20:
+                            print('Failed to find good tile even after 20 tries.')
+                            break
+
+                    np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
+                    tiles[idx,2,:] = xd - tile_radius, yd - tile_radius
+            
+            elif row[1] == img_name: 
+                # distant image is different from anchor/neighbor image
+                found_good_tile = False
+                tries = 0
+                while not found_good_tile:
+                    xd, yd = sample_distant_diff(img_shape, tile_radius)
                     if verbose:
                         print("    Saving distant tile #{}".format(idx))
                         print("    Distant tile center:{}".format((xd, yd)))
@@ -121,20 +158,13 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, tile_size=50, neighborhoo
                         tile_distant = extract_tile(img_padded, xd, yd, tile_radius)
                         if size_even:
                             tile_distant = tile_distant[:, :-1,:-1]
-                        np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
-                    tiles[idx,2,:] = xd - tile_radius, yd - tile_radius
-            
-            elif row[1] == img_name: 
-                # distant image is different from anchor/neighbor image
-                xd, yd = sample_distant_diff(img_shape, tile_radius)
-                if verbose:
-                        print("    Saving distant tile #{}".format(idx))
-                        print("    Distant tile center:{}".format((xd, yd)))
-                if save:
-                    tile_distant = extract_tile(img_padded, xd, yd, tile_radius)
-                    if size_even:
-                        tile_distant = tile_distant[:, :-1,:-1]
-                    np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
+                        if fraction_missing_pixels(tile_distant) <= MAX_MISSING_PIXELS:
+                            found_good_tile = True
+                    if tries > 20:
+                        print('Failed to find good tile even after 20 tries.')
+                        break
+
+                np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
                 tiles[idx,2,:] = xd - tile_radius, yd - tile_radius
             
     return tiles

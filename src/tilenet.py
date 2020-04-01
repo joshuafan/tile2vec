@@ -42,11 +42,11 @@ class TileNet(nn.Module):
         self.z_dim = z_dim
         self.in_planes = 16
 
-        self.conv1 = nn.Conv2d(self.in_channels, 16, kernel_size=3, stride=1,
+        self.conv1 = nn.Conv2d(self.in_channels, 64, kernel_size=3, stride=1,
             padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(16)
-        self.layer1 = self._make_layer(16, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(32, num_blocks[1], stride=1)
+        self.layer1 = self._make_layer(16, num_blocks[0], stride=2)
+        self.layer2 = self._make_layer(32, num_blocks[1], stride=2)
         #self.layer3 = self._make_layer(256, num_blocks[2], stride=1)
         #self.layer4 = self._make_layer(512, num_blocks[3], stride=1)
         self.layer5 = self._make_layer(self.z_dim, num_blocks[4],
@@ -63,12 +63,17 @@ class TileNet(nn.Module):
     def encode(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
         x = self.layer1(x)
+        #print('after layer 1', x.shape)
         x = self.layer2(x)
+        #print('after layer 2', x.shape)
         #x = self.layer3(x)
         #x = self.layer4(x)
         x = self.layer5(x)
-        x = F.avg_pool2d(x, 4)
+        #print('after layer 5', x.shape)
+        x = F.avg_pool2d(x, 2)
+        #print('after avgpool', x.shape)
         z = x.view(x.size(0), -1)
+        #print('z', z.shape)
         return z
 
     def forward(self, x):
