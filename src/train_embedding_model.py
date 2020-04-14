@@ -14,11 +14,13 @@ sys.path.append('../../RemoteSensing')
 import small_resnet
 
 START_DATE = "2018-08-01"
-DATASET_DIR = "../../RemoteSensing/datasets/dataset_" + START_DATE
-IMAGE_DIR = "../../RemoteSensing/datasets/images_" + START_DATE
+DATA_DIR = "/mnt/beegfs/bulk/mirror/jyf6/datasets"
+DATASET_DIR = os.path.join(DATA_DIR, "dataset_" + START_DATE)
+IMAGE_DIR = os.path.join(DATA_DIR, "images_" + START_DATE)
+TILE_METADATA_FILE = os.path.join(DATASET_DIR, "tile_info_train.csv")
 BAND_STATISTICS_FILE = os.path.join(DATASET_DIR, "band_statistics_train.csv")
-TILE2VEC_TILE_DATASET_DIR = "../../RemoteSensing/datasets/tile2vec_tiles_2018-08-01_neighborhood100"
-MODEL_DIR = "../../RemoteSensing/models/tile2vec_dim32_neighborhood100"
+TILE2VEC_TILE_DATASET_DIR = os.path.join(DATA_DIR, "tile2vec_tiles_" + START_DATE + "_neighborhood100")
+MODEL_DIR = os.path.join(DATA_DIR, "models/tile2vec_dim256_neighborhood100")
 
 if not os.path.exists(TILE2VEC_TILE_DATASET_DIR):
     os.makedirs(TILE2VEC_TILE_DATASET_DIR)
@@ -28,37 +30,37 @@ if not os.path.exists(MODEL_DIR):
 RGB_BANDS = [1, 2, 3]
 NUM_TRIPLETS = 100000
 NEIGHBORHOOD = 100
-CROP_TYPE_INDICES = range(9, 24)  # range(12, 27)
+CROP_TYPE_INDICES = range(12, 42)
 TILE_SIZE = 10
 augment = True
 batch_size = 50
 shuffle = True
 num_workers = 4
-bands=25  #29
+bands=43
 z_dim=256
-epochs = 20
+epochs = 50
 margin = 10
 l2 = 0.01
-
+lr = 1e-4
+FROM_PRETRAINED = True
 
 # Choose which files to sample triplets of tiles from 
-img_triplets = get_triplet_imgs(IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
+#img_triplets = get_triplet_imgs(TILE_METADATA_FILE, n_triplets=NUM_TRIPLETS)  # IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
 
 # Get tiles
-tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
-                          IMAGE_DIR,
-                          img_triplets,
-                          CROP_TYPE_INDICES,
-                          tile_size=TILE_SIZE,
-                          neighborhood=NEIGHBORHOOD,
-                          save=True,
-                          verbose=True)
-#exit(1)
+#tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
+#                          # IMAGE_DIR,
+#                          img_triplets,
+#                          CROP_TYPE_INDICES,
+#                          tile_size=TILE_SIZE,
+#                          neighborhood=NEIGHBORHOOD,
+#                          save=True,
+#                          verbose=True)
 
 # Visualize
 #tile_dir = '../data/example_tiles/'
-#triplets_to_visualize = 10
-#plt.rcParams['figure.figsize'] = (12, 4)
+#triplets_to_visualize = 20
+#plt.rcParams['figure.figsize'] = (20, 4)
 #for i in range(triplets_to_visualize):
 #    tile = np.load(os.path.join(TILE2VEC_TILE_DATASET_DIR, str(i) + 'anchor.npy'))
 #    neighbor = np.load(os.path.join(TILE2VEC_TILE_DATASET_DIR, str(i) + 'neighbor.npy'))
@@ -66,8 +68,8 @@ tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
 #    print('tile shape', tile.shape, 'dtype', tile.dtype)
 #    visualize_image = np.moveaxis(neighbor[RGB_BANDS, :, :] / 1000., 0, -1)
 #    print('visualized', visualize_image.shape, 'dtype', tile.dtype)
-#    #vmin = np.array([tile, neighbor, distant]).min()
-#    #vmax = np.array([tile, neighbor, distant]).max()
+    #vmin = np.array([tile, neighbor, distant]).min()
+    #vmax = np.array([tile, neighbor, distant]).max()
 
 #    plt.figure()
 #    plt.subplot(1, 3, 1)
@@ -98,6 +100,8 @@ in_channels = bands
 # Set up network
 TileNet = make_tilenet(in_channels=in_channels, z_dim=z_dim)
 # TileNet = small_resnet.resnet18(input_channels=in_channels, output_dim=z_dim)
+if FROM_PRETRAINED:
+    TileNet.load_state_dict(torch.load(os.path.join(MODEL_DIR, 'TileNet.ckpt')), map_location=device)
 TileNet.train()
 if cuda: TileNet.cuda()
 
@@ -117,5 +121,5 @@ for epoch in range(0, epochs):
 
     # Save model after last epoch
     if save_models:
-        model_fn = os.path.join(MODEL_DIR, 'TileNet_epoch50.ckpt')
+        model_fn = os.path.join(MODEL_DIR, 'TileNet.ckpt')
         torch.save(TileNet.state_dict(), model_fn)

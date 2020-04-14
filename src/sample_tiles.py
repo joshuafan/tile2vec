@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 #import gdal
 import os
 import random
@@ -40,23 +41,27 @@ def fraction_missing_pixels(tile):
     return np.mean(tile[MISSING_DATA_IDX, :, :])
 
 
-def get_triplet_imgs(img_dir, img_ext='.tif', n_triplets=1000):
+def get_triplet_imgs(tile_metadata_file, n_triplets=1000, MAX_MISSING_FRACTION=0.1):  #img_dir, img_ext='.tif', n_triplets=1000):
     """
     Returns a numpy array of dimension (n_triplets, 2). First column is
     the img name of anchor/neighbor tiles and second column is img name 
     of distant tiles.
     """
-    img_names = []
-    for filename in os.listdir(img_dir):
-        if filename.endswith(img_ext):
-            img_names.append(filename)
+    tile_dataset = pd.read_csv(tile_metadata_file)
+    tiles_with_data = tile_dataset[tile_dataset['missing_reflectance'] < MAX_MISSING_FRACTION]
+    img_names = tiles_with_data['tile_file']
+    #img_names = []
+    #for filename in os.listdir(img_dir):
+    #    if filename.endswith(img_ext):
+    #        img_names.append(filename)
     img_triplets = list(map(lambda _: random.choice(img_names), range(2 * n_triplets)))
     img_triplets = np.array(img_triplets)
     return img_triplets.reshape((-1, 2))
 
-def get_triplet_tiles(tile_dir, img_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50, 
+def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50, 
                       neighborhood=100, save=True, verbose=False,
-                      MAX_CROP_TYPE_DISTANCE=0.6, MAX_MISSING_PIXELS=0.5):
+                      MAX_CROP_TYPE_DISTANCE=0.8, MAX_MISSING_PIXELS=0.1, MAX_TRIES=10):  # img_dir
+    
     # We only want to load each image into memory once. For each unique image,
     # load it into memory, and then loop through "img_triplets" to find which
     # sub-tiles should come from that image.
@@ -82,7 +87,7 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, CROP_TYPE_INDICES, tile_s
         #                     mode='reflect')
 
         assert (img_name[-3:] == 'npy')
-        img_padded = np.load(os.path.join(img_dir, img_name))  # TODO Reshape???
+        img_padded = np.load(img_name)  # os.path.join(img_dir, img_name))  # TODO Reshape???
         img_shape = img_padded.shape
 
         print('Shape of original image', img_shape)
@@ -108,13 +113,14 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, CROP_TYPE_INDICES, tile_s
                         tile_neighbor = tile_neighbor[:, :-1,:-1]
                     tries += 1
                     print('fraction missing', fraction_missing_pixels(tile_anchor))
+                    print('crop type distance', crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES))
                     if (fraction_missing_pixels(tile_anchor) <= MAX_MISSING_PIXELS and fraction_missing_pixels(tile_neighbor) <= MAX_MISSING_PIXELS and crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES) <= MAX_CROP_TYPE_DISTANCE):
                         print('(GOOD) Found good neighbors')
                         found_good_neighbors = True
                     else:
                         print('(OOPS) Try again.')
-                    if tries > 20:
-                        print('Failed to find good tile even after 20 tries.')
+                    if tries > MAX_TRIES:
+                        print('Failed to find good tile even after', MAX_TRIES, 'tries.')
                         break
 
                 np.save(os.path.join(tile_dir, '{}anchor.npy'.format(idx)), tile_anchor)
@@ -139,7 +145,7 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, CROP_TYPE_INDICES, tile_s
                             if fraction_missing_pixels(tile_distant) <= MAX_MISSING_PIXELS:
                                 found_good_tile = True
                         if tries > 20:
-                            print('(DISTANT) Failed to find good tile even after 20 tries.')
+                            print('(DISTANT) Failed to find good tile even after', MAX_TRIES, 'tries.')
                             break
 
                     np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
@@ -160,8 +166,8 @@ def get_triplet_tiles(tile_dir, img_dir, img_triplets, CROP_TYPE_INDICES, tile_s
                             tile_distant = tile_distant[:, :-1,:-1]
                         if fraction_missing_pixels(tile_distant) <= MAX_MISSING_PIXELS:
                             found_good_tile = True
-                    if tries > 20:
-                        print('Failed to find good tile even after 20 tries.')
+                    if tries > MAX_TRIES:
+                        print('(DISTANT) Failed to find good tile even after', MAX_TRIES, 'tries.')
                         break
 
                 np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)

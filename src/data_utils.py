@@ -21,6 +21,6 @@ import numpy as np
 def standardize_image(img, band_means, band_stds):
     band_means = band_means[:, np.newaxis, np.newaxis]
     band_stds = band_stds[:, np.newaxis, np.newaxis]
-    #print("Image shape", img.shape)
-    #print("Means shape", band_means.shape)
+    print("Image shape", img.shape)
+    print("Means shape", band_means.shape)
     return (img - band_means) / band_stds
