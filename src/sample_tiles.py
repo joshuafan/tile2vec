@@ -31,7 +31,6 @@ def crop_type_distance(anchor_tile, neighbor_tile, CROP_TYPE_INDICES):
     l1_norm = np.linalg.norm(anchor_crop_types - neighbor_crop_types, ord=1)
     #print('Anchor crop types', anchor_crop_types)
     #print('Neighbor crop types', neighbor_crop_types)
-    #print('L1 norm', l1_norm)
     return l1_norm
 
 
@@ -60,8 +59,8 @@ def get_triplet_imgs(tile_metadata_file, n_triplets=1000, MAX_MISSING_FRACTION=0
 
 def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50, 
                       neighborhood=100, save=True, verbose=False,
-                      MAX_CROP_TYPE_DISTANCE=0.8, MAX_MISSING_PIXELS=0.1, MAX_TRIES=10):  # img_dir
-    
+                      MAX_CROP_TYPE_DISTANCE=1., MAX_MISSING_PIXELS=0.1, MAX_TRIES=10):  # img_dir
+
     # We only want to load each image into memory once. For each unique image,
     # load it into memory, and then loop through "img_triplets" to find which
     # sub-tiles should come from that image.
@@ -112,10 +111,10 @@ def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50,
                         tile_anchor = tile_anchor[:, :-1,:-1]
                         tile_neighbor = tile_neighbor[:, :-1,:-1]
                     tries += 1
-                    print('fraction missing', fraction_missing_pixels(tile_anchor))
-                    print('crop type distance', crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES))
-                    if (fraction_missing_pixels(tile_anchor) <= MAX_MISSING_PIXELS and fraction_missing_pixels(tile_neighbor) <= MAX_MISSING_PIXELS and crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES) <= MAX_CROP_TYPE_DISTANCE):
+                    if (fraction_missing_pixels(tile_anchor) <= MAX_MISSING_PIXELS and fraction_missing_pixels(tile_neighbor) <= MAX_MISSING_PIXELS and crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES) < MAX_CROP_TYPE_DISTANCE):
                         print('(GOOD) Found good neighbors')
+                        print('fraction missing', fraction_missing_pixels(tile_anchor))
+                        print('crop type distance', crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES))
                         found_good_neighbors = True
                     else:
                         print('(OOPS) Try again.')

@@ -37,6 +37,7 @@ class TileTripletsDataset(Dataset):
         sample = {'anchor': a, 'neighbor': n, 'distant': d}
         if self.transform:
             sample = self.transform(sample)
+
         return sample
 
 

@@ -18,9 +18,15 @@ import numpy as np
 #     elif img_type == 'landsat':
 #         return np.clip(img, clip_min, clip_max) / (clip_max - clip_min)
 
-def standardize_image(img, band_means, band_stds):
-    band_means = band_means[:, np.newaxis, np.newaxis]
-    band_stds = band_stds[:, np.newaxis, np.newaxis]
-    print("Image shape", img.shape)
-    print("Means shape", band_means.shape)
-    return (img - band_means) / band_stds
+def standardize_image(img, band_means, band_stds, bands_to_transform=list(range(0, 12))):
+    band_means = band_means[bands_to_transform, np.newaxis, np.newaxis]
+    band_stds = band_stds[bands_to_transform, np.newaxis, np.newaxis]
+
+    img[bands_to_transform, :, :] = (img[bands_to_transform, :, :] - band_means) / band_stds
+
+    # Extract RGB bands for now
+    #RGB_BANDS = [3, 2, 1]
+    #standardized_img = standardized_img[RGB_BANDS, :, :]
+    #print("Image shape", img.shape)
+    #print("Means shape", band_means.shape)
+    return img
