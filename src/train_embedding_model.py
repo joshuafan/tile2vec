@@ -13,7 +13,7 @@ import sys
 sys.path.append('../../RemoteSensing')
 import small_resnet
 
-START_DATE = "2018-07-17"
+START_DATE = "2018-07-16"
 DATA_DIR = "/mnt/beegfs/bulk/mirror/jyf6/datasets"
 DATASET_DIR = os.path.join(DATA_DIR, "dataset_" + START_DATE)
 IMAGE_DIR = os.path.join(DATA_DIR, "images_" + START_DATE)
@@ -21,10 +21,10 @@ TILE_METADATA_FILE = os.path.join(DATASET_DIR, "tile_info_train.csv")
 TILE_METADATA_FILE_VAL = os.path.join(DATASET_DIR, "tile_info_val.csv")
 
 BAND_STATISTICS_FILE = os.path.join(DATASET_DIR, "band_statistics_train.csv")
-TILE2VEC_TILE_DATASET_DIR = os.path.join(DATA_DIR, "tile2vec_tiles_" + START_DATE + "_neighborhood100")
-TILE2VEC_TILE_DATASET_DIR_VAL = os.path.join(DATA_DIR, "tile2vec_tiles_" + START_DATE + "_neighborhood100_val")
+TILE2VEC_TILE_DATASET_DIR = os.path.join(DATA_DIR, "tile2vec_tiles_5_" + START_DATE)
+TILE2VEC_TILE_DATASET_DIR_VAL = os.path.join(DATA_DIR, "tile2vec_tiles_5_val_" + START_DATE)
 
-MODEL_DIR = os.path.join(DATA_DIR, "models/tile2vec_recon_no_bn")
+MODEL_DIR = os.path.join(DATA_DIR, "models/tile2vec_recon_5")
 
 if not os.path.exists(TILE2VEC_TILE_DATASET_DIR):
     os.makedirs(TILE2VEC_TILE_DATASET_DIR)
@@ -32,9 +32,9 @@ if not os.path.exists(MODEL_DIR):
     os.makedirs(MODEL_DIR)
 
 RGB_BANDS = [1, 2, 3]
-NUM_TRIPLETS = 100000
-NUM_TRIPLETS_VAL = 20000
-NEIGHBORHOOD = 10
+NUM_TRIPLETS = 100000 # 200000
+NUM_TRIPLETS_VAL = 20000#20000
+NEIGHBORHOOD = 25
 CROP_TYPE_INDICES = range(12, 42)
 TILE_SIZE = 10
 augment = True
@@ -42,41 +42,41 @@ batch_size = 50
 shuffle = True
 num_workers = 4
 bands=43
-z_dim=256
+z_dim=256 #64
 epochs = 50
 margin = 10
-l2 = 1e-4
-lr = 1e-3
-FROM_PRETRAINED = False  #True  #False  # False
+l2 = 1e-2
+lr = 1e-3 #3  #2
+FROM_PRETRAINED = True #False  # False # True #False  #False  #True  #True  #False  # False
+GENERATE_DATA = False #False #True  #False
 
-# Choose which files to sample triplets of tiles from 
-#img_triplets = get_triplet_imgs(TILE_METADATA_FILE, n_triplets=NUM_TRIPLETS)  # IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
+if GENERATE_DATA:
+    # Choose which files to sample triplets of tiles from 
+    img_triplets = get_triplet_imgs(TILE_METADATA_FILE, n_triplets=NUM_TRIPLETS)  # IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
 
-# Get tiles
-#tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
+    # Get tiles
+    tiles = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR,
                           # IMAGE_DIR,
-#                          img_triplets,
-#                          CROP_TYPE_INDICES,
-#                          tile_size=TILE_SIZE,
-#                          neighborhood=NEIGHBORHOOD,
-#                          save=True,
-#                          verbose=True)
+                          img_triplets,
+                          CROP_TYPE_INDICES,
+                          tile_size=TILE_SIZE,
+                          neighborhood=NEIGHBORHOOD,
+                          save=True,
+                          verbose=True)
 
-# Choose which files to sample triplets of tiles from 
-#img_triplets_val = get_triplet_imgs(TILE_METADATA_FILE_VAL, n_triplets=NUM_TRIPLETS_VAL)  # IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
+    # Choose which files to sample triplets of tiles from 
+    img_triplets_val = get_triplet_imgs(TILE_METADATA_FILE_VAL, n_triplets=NUM_TRIPLETS_VAL)  # IMAGE_DIR, img_ext='.npy', n_triplets=NUM_TRIPLETS)
 
-# Get tiles
-#tiles_val = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR_VAL,
+    # Get tiles
+    tiles_val = get_triplet_tiles(TILE2VEC_TILE_DATASET_DIR_VAL,
                            # IMAGE_DIR,
-#                          img_triplets_val,
-#                          CROP_TYPE_INDICES,
-#                          tile_size=TILE_SIZE,
-#                          neighborhood=NEIGHBORHOOD,
-#                          save=True,
-#                          verbose=True)
-
-
-# Visualize
+                          img_triplets_val,
+                          CROP_TYPE_INDICES,
+                          tile_size=TILE_SIZE,
+                          neighborhood=NEIGHBORHOOD,
+                          save=True,
+                          verbose=True)
+## Visualize
 #tile_dir = '../data/example_tiles/'
 #triplets_to_visualize = 20
 #plt.rcParams['figure.figsize'] = (20, 4)
@@ -87,9 +87,11 @@ FROM_PRETRAINED = False  #True  #False  # False
 #    print('tile shape', tile.shape, 'dtype', tile.dtype)
 #    visualize_image = np.moveaxis(neighbor[RGB_BANDS, :, :] / 1000., 0, -1)
 #    print('visualized', visualize_image.shape, 'dtype', tile.dtype)
-    #vmin = np.array([tile, neighbor, distant]).min()
-    #vmax = np.array([tile, neighbor, distant]).max()
-
+#    print('Anchor crops', np.mean(tile, axis=(1,2))[CROP_TYPE_INDICES])
+#    print('Neighbor crops', np.mean(neighbor, axis=(1,2))[CROP_TYPE_INDICES])
+#    print('Distant crops crops', np.mean(distant, axis=(1,2))[CROP_TYPE_INDICES])
+#    vmin = np.array([tile, neighbor, distant]).min()
+#    vmax = np.array([tile, neighbor, distant]).max()
 #    plt.figure()
 #    plt.subplot(1, 3, 1)
 #    plt.imshow(np.moveaxis(tile[RGB_BANDS, :, :] / 1000., 0, -1))
@@ -101,8 +103,9 @@ FROM_PRETRAINED = False  #True  #False  # False
 #    plt.imshow(np.moveaxis(distant[RGB_BANDS, :, :] / 1000., 0, -1))
 #    plt.title('Distant ' + str(i))
 #    plt.savefig('../../RemoteSensing/exploratory_plots/example_tiles_' + str(i) +'.png')
+#exit(0)
 
-# Read mean/standard deviation for each band, for standardization purposes
+## Read mean/standard deviation for each band, for standardization purposes
 train_statistics = pd.read_csv(BAND_STATISTICS_FILE)
 train_means = train_statistics['mean'].values
 train_stds = train_statistics['std'].values
@@ -137,7 +140,7 @@ if cuda: TileNet.cuda()
 
 
 # Set up optimizer
-optimizer = optim.Adam(TileNet.parameters(), lr=lr)  # , betas=(0.5, 0.999))
+optimizer = optim.Adam(TileNet.parameters(), lr=lr, betas=(0.5, 0.999))
 print_every = 10000
 save_models = True
 if not os.path.exists(MODEL_DIR): os.makedirs(MODEL_DIR)
@@ -157,5 +160,5 @@ for epoch in range(0, epochs):
 
     # Save model after last epoch
     if save_models:
-        model_fn = os.path.join(MODEL_DIR, 'TileNet_2.ckpt')
+        model_fn = os.path.join(MODEL_DIR, 'TileNet.ckpt')
         torch.save(TileNet.state_dict(), model_fn)

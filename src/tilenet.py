@@ -40,19 +40,19 @@ class TileNet(nn.Module):
         super(TileNet, self).__init__()
         self.in_channels = in_channels
         self.z_dim = z_dim
-        self.in_planes = 64
+        self.in_planes = 20
 
         self.conv1 = nn.Conv2d(self.in_channels, self.in_planes, kernel_size=1, stride=1,
-            padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.layer1 = self._make_layer(64, num_blocks[0], stride=2)
-        self.layer2 = self._make_layer(128, num_blocks[1], stride=1)
-        self.layer3 = self._make_layer(256, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(512, num_blocks[3], stride=1)
+            padding=0, bias=False)
+        self.bn1 = nn.BatchNorm2d(20)
+        self.layer1 = self._make_layer(20, num_blocks[0], stride=2)
+        self.layer2 = self._make_layer(64, num_blocks[1], stride=1)
+        self.layer3 = self._make_layer(128, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(256, num_blocks[3], stride=1)
         self.layer5 = self._make_layer(self.z_dim, num_blocks[4],
             stride=2)
         #self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        #self.fc = nn.Linear(128, self:.z_dim)  # TODO change
+        self.fc = nn.Linear(self.z_dim, self.z_dim)  # TODO change
         self.decoder1 = nn.ConvTranspose2d(self.z_dim, 128, 3, stride=1)
         self.decoder2 = nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1)
         self.decoder3 = nn.ConvTranspose2d(64, self.in_channels, 2, stride=2, padding=0)
@@ -88,7 +88,7 @@ class TileNet(nn.Module):
         #print('after avgpool', x.shape)
         # x = torch.flatten(x, 1)
         ##print('after flatten', x.shape)
-        #z = self.fc(x)
+        z = self.fc(z)
         #print('final embedding:', z.shape)
         return z
 
@@ -127,7 +127,8 @@ class TileNet(nn.Module):
         #print('patch shape', patch.shape)
         z_p, z_n, z_d = (self.encode(patch), self.encode(neighbor),
             self.encode(distant))
- 
+        #print('Embedding', z_p)
+
         # Compute reconstruction loss
         recon_p, recon_n, recon_d = (self.decode(z_p), self.decode(z_n),
                 self.decode(z_d))
@@ -139,10 +140,12 @@ class TileNet(nn.Module):
         l_recon_d = criterion(distant, recon_d)
         l_recon = (l_recon_p + l_recon_n + l_recon_d) / 3
         #print('l_recon', l_recon)
-        
+
+        RECON_WEIGHT = 1.0 #0.5
+
         # Compute triplet loss
         loss, l_n, l_d, l_nd = self.triplet_loss(z_p, z_n, z_d, margin=margin, l2=l2)
-        loss += l_recon
+        loss += (l_recon * RECON_WEIGHT)
         return loss, l_n, l_d, l_nd, l_recon
 
 def make_tilenet(in_channels=4, z_dim=512):

@@ -31,6 +31,11 @@ def train_triplet_epoch(model, cuda, dataloader, optimizer, epoch, is_train=True
     print_sum_loss = 0
     for idx, triplets in enumerate(dataloader):
         p, n, d = prep_triplets(triplets, cuda)
+
+        #print('p shape', p[0].shape, 'band means', torch.mean(p[0], dim=(1,2)))
+        #print('n band means', torch.mean(n[0], dim=(1,2)))
+        #print('d band means', torch.mean(d[0], dim=(1,2)))
+        #print('p random pixel', p[0, :, 5, 5])
         optimizer.zero_grad()
         with torch.set_grad_enabled(is_train):
             loss, l_n, l_d, l_nd, l_recon = model.loss(p, n, d, margin=margin, l2=l2)

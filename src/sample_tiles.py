@@ -54,12 +54,19 @@ def get_triplet_imgs(tile_metadata_file, n_triplets=1000, MAX_MISSING_FRACTION=0
     #    if filename.endswith(img_ext):
     #        img_names.append(filename)
     img_triplets = list(map(lambda _: random.choice(img_names), range(2 * n_triplets)))
-    img_triplets = np.array(img_triplets)
-    return img_triplets.reshape((-1, 2))
+    img_triplets = np.array(img_triplets).reshape((-1, 2))
+
+    # For half the examples, draw the "distant" tile from the same image as tne anchor,
+    # to force the model to learn a more fine-grained representation
+    #for i in range(img_triplets.shape[0]):
+    #    if i % 2 == 0:
+    #        img_triplets[i, 1] = img_triplets[i, 0] 
+    return img_triplets
+
 
 def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50, 
                       neighborhood=100, save=True, verbose=False,
-                      MAX_CROP_TYPE_DISTANCE=1., MAX_MISSING_PIXELS=0.1, MAX_TRIES=10):  # img_dir
+                      MAX_CROP_TYPE_DISTANCE=1.0, MAX_MISSING_PIXELS=0.1, MAX_TRIES=10):  # img_dir
 
     # We only want to load each image into memory once. For each unique image,
     # load it into memory, and then loop through "img_triplets" to find which
@@ -85,6 +92,7 @@ def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50,
         #                                     (tile_radius, tile_radius), (0,0)],
         #                     mode='reflect')
 
+        # Assume images are .npy files already in Pytorch format (CxWxH)
         assert (img_name[-3:] == 'npy')
         img_padded = np.load(img_name)  # os.path.join(img_dir, img_name))  # TODO Reshape???
         img_shape = img_padded.shape
@@ -111,6 +119,9 @@ def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50,
                         tile_anchor = tile_anchor[:, :-1,:-1]
                         tile_neighbor = tile_neighbor[:, :-1,:-1]
                     tries += 1
+                    
+                    # Check if both tiles have <10% missing reflectance data, and that they are similar in terms of
+                    # crop types
                     if (fraction_missing_pixels(tile_anchor) <= MAX_MISSING_PIXELS and fraction_missing_pixels(tile_neighbor) <= MAX_MISSING_PIXELS and crop_type_distance(tile_anchor, tile_neighbor, CROP_TYPE_INDICES) < MAX_CROP_TYPE_DISTANCE):
                         print('(GOOD) Found good neighbors')
                         print('fraction missing', fraction_missing_pixels(tile_anchor))
@@ -126,7 +137,7 @@ def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50,
                 np.save(os.path.join(tile_dir, '{}neighbor.npy'.format(idx)), tile_neighbor)
                 tiles[idx,0,:] = xa - tile_radius, ya - tile_radius
                 tiles[idx,1,:] = xn - tile_radius, yn - tile_radius
-                
+
                 if row[1] == img_name:
                     # distant image is same as anchor/neighbor image
                     found_good_tile = False
@@ -141,15 +152,21 @@ def get_triplet_tiles(tile_dir, img_triplets, CROP_TYPE_INDICES, tile_size=50,
                             tile_distant = extract_tile(img_padded, xd, yd, tile_radius)
                             if size_even:
                                 tile_distant = tile_distant[:, :-1,:-1]
-                            if fraction_missing_pixels(tile_distant) <= MAX_MISSING_PIXELS:
+
+                            # Check that the distant tile has <10% missing reflectance data, and it's different from
+                            # anchor tile in terms of crop types
+                            if fraction_missing_pixels(tile_distant) <= MAX_MISSING_PIXELS and crop_type_distance(tile_anchor, tile_distant, CROP_TYPE_INDICES) > MAX_CROP_TYPE_DISTANCE:
                                 found_good_tile = True
+                                print('(GOOD) found good distant tile')
+                            else:
+                                print('(OOPS) distant tile had missing data')
                         if tries > 20:
                             print('(DISTANT) Failed to find good tile even after', MAX_TRIES, 'tries.')
                             break
 
                     np.save(os.path.join(tile_dir, '{}distant.npy'.format(idx)), tile_distant)
                     tiles[idx,2,:] = xd - tile_radius, yd - tile_radius
-            
+        
             elif row[1] == img_name: 
                 # distant image is different from anchor/neighbor image
                 found_good_tile = False
